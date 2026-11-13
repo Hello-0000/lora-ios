@@ -1,0 +1,54 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境信息
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译 arm64
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project LoRa.xcodeproj \
+            -scheme LoRa \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee build.log
+
+      - name: 打包 IPA
+        run: |
+          APP="build/Build/Products/Release-iphoneos/LoRa.app"
+          test -d "$APP"
+          mkdir -p out/Payload
+          cp -R "$APP" out/Payload/
+          cd out
+          zip -qry LoRa-unsigned.ipa Payload
+          ls -lh LoRa-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LoRa-ipa
+          path: out/LoRa-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14

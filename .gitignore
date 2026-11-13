@@ -1,0 +1,8 @@
+.DS_Store
+build/
+out/
+*.ipa
+*.log
+*.xcodeproj/
+secrets/
+gh_token.txt
