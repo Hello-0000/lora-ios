@@ -130,7 +130,7 @@ final class WebViewController: UIViewController {
         }
     }
 
-    func showSettings() {
+    @objc func showSettings() {
         let controller = SettingsViewController { [weak self] in
             self?.loadBaseURL()
         }
