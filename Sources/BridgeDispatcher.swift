@@ -15,8 +15,8 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         didReceive message: WKScriptMessage
     ) {
         guard message.name == "iOS" else { return }
-        guard let body = message.body as? String else {
-            DebugLog.shared.append("收到非字符串消息: \(String(describing: message.body))")
+        guard let body = Self.text(from: message.body) else {
+            DebugLog.shared.append("收到无法识别的消息: \(String(describing: message.body))")
             return
         }
         guard
@@ -32,6 +32,18 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         NSLog("[bridge] method=%@ params=%@", method, String(describing: params))
         DebugLog.shared.append("JS → \(method) \(String(describing: params).prefix(160))")
         handle(method: method, params: params)
+    }
+
+    /// H5 调用 postMessage({body: "..."})，WKWebView 收到的是字典而不是字符串
+    private static func text(from body: Any) -> String? {
+        if let text = body as? String { return text }
+        guard let dictionary = body as? [String: Any] else { return nil }
+        if let text = dictionary["body"] as? String { return text }
+        if let data = try? JSONSerialization.data(withJSONObject: dictionary),
+           let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        return nil
     }
 
     private func handle(method: String, params: [String: Any]) {

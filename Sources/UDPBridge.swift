@@ -149,14 +149,10 @@ final class UDPBridge: UDPClientDelegate {
 
         if response.opcode == LoRaProtocol.Opcode.search.response {
             guard let device = LoRaProtocol.parseSearch(response.payload, udpIp: ip) else { return }
-            let model = device["model"] as? String ?? ""
             if let mac = device["mac"] as? String {
                 knownIPs[mac.uppercased()] = ip
             }
-            guard ["0275", "0276", "0277"].contains(model) else {
-                DebugLog.shared.append("忽略非网关型号: \(model)")
-                return
-            }
+            DebugLog.shared.append("搜索响应 payload(\(response.payload.count)): \(Self.dump(response.payload))")
             host?.sendCallback(.udp, payload: ["cmd": "search", "data": device])
 
         } else if response.opcode == LoRaProtocol.Opcode.getDetail.response {
@@ -193,5 +189,13 @@ final class UDPBridge: UDPClientDelegate {
 
     private static func macKey(_ text: String?) -> String {
         (text ?? "").uppercased()
+    }
+
+    /// 带偏移量的字节转储，便于对齐协议字段
+    private static func dump(_ bytes: [UInt8]) -> String {
+        stride(from: 0, to: min(bytes.count, 48), by: 8).map { start in
+            let end = min(start + 8, bytes.count)
+            return "\(start):" + bytes[start..<end].map { Hex.byte($0) }.joined(separator: " ")
+        }.joined(separator: " | ")
     }
 }
