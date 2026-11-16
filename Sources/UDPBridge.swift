@@ -11,10 +11,11 @@ final class UDPBridge: UDPClientDelegate {
     private let client = UDPClient()
     private let sweepQueue = DispatchQueue(label: "com.alexdtu.lora.sweep")
     private var started = false
-    private var sweeping = false
 
     /// mac（大写冒号格式）→ 设备上报的 IP，用于后续单播
     private var knownIPs: [String: String] = [:]
+    private var searchToken = 0
+    private var searchHits = 0
 
     init(host: WebViewController?) {
         self.host = host
@@ -66,35 +67,37 @@ final class UDPBridge: UDPClientDelegate {
             send(packet, to: ip)
         } else {
             send(packet, to: LoRaProtocol.broadcast)
-            sweep(packet)
+            sweepOnce(packet)
         }
     }
 
     private func search() {
+        searchToken += 1
+        let token = searchToken
+        searchHits = 0
+
         let packet = LoRaProtocol.build(opcode: .search)
         send(packet, to: LoRaProtocol.broadcast)
-        sweep(packet)
+
+        // 广播没结果时再退化为同网段单播扫描
+        sweepQueue.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self, self.searchToken == token, self.searchHits == 0 else { return }
+            self.sweepOnce(packet)
+        }
     }
 
-    /// 同网段逐地址单播，分两轮覆盖丢包
-    private func sweep(_ packet: [UInt8]) {
+    /// 同网段逐地址单播（仅广播无响应时使用）
+    private func sweepOnce(_ packet: [UInt8]) {
         guard let info = NetworkInfo.wifiIPv4() else {
-            DebugLog.shared.append("未发现 Wi-Fi IPv4，无法扫描（是否没连 Wi-Fi？）")
+            DebugLog.shared.append("未发现 Wi-Fi IPv4，无法扫描")
             return
         }
-        guard !sweeping else { return }
-        sweeping = true
-        DebugLog.shared.append("扫描 \(info.address) 网段，共 \(info.hosts.count) 个地址")
-
+        DebugLog.shared.append("广播无响应，扫描 \(info.address) 网段")
         sweepQueue.async { [weak self] in
             guard let self else { return }
-            for _ in 0..<2 {
-                for ip in info.hosts {
-                    self.client.send(packet, to: ip, port: LoRaProtocol.sendPort)
-                }
-                Thread.sleep(forTimeInterval: 0.5)
+            for ip in info.hosts {
+                self.client.send(packet, to: ip, port: LoRaProtocol.sendPort)
             }
-            self.sweeping = false
         }
     }
 
@@ -149,10 +152,15 @@ final class UDPBridge: UDPClientDelegate {
 
         if response.opcode == LoRaProtocol.Opcode.search.response {
             guard let device = LoRaProtocol.parseSearch(response.payload, udpIp: ip) else { return }
+            searchHits += 1
             if let mac = device["mac"] as? String {
                 knownIPs[mac.uppercased()] = ip
             }
-            DebugLog.shared.append("搜索响应 payload(\(response.payload.count)): \(Self.dump(response.payload))")
+            let model = device["model"] as? String ?? ""
+            guard ["0275", "0276", "0277"].contains(model) else {
+                DebugLog.shared.append("跳过非 LoRa 网关型号 \(model)（\(device["name"] ?? "")）")
+                return
+            }
             host?.sendCallback(.udp, payload: ["cmd": "search", "data": device])
 
         } else if response.opcode == LoRaProtocol.Opcode.getDetail.response {
@@ -189,13 +197,5 @@ final class UDPBridge: UDPClientDelegate {
 
     private static func macKey(_ text: String?) -> String {
         (text ?? "").uppercased()
-    }
-
-    /// 带偏移量的字节转储，便于对齐协议字段
-    private static func dump(_ bytes: [UInt8]) -> String {
-        stride(from: 0, to: min(bytes.count, 48), by: 8).map { start in
-            let end = min(start + 8, bytes.count)
-            return "\(start):" + bytes[start..<end].map { Hex.byte($0) }.joined(separator: " ")
-        }.joined(separator: " | ")
     }
 }

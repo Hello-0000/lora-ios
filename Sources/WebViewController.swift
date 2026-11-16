@@ -132,8 +132,13 @@ final class WebViewController: UIViewController {
 
         let name = callback.rawValue
         let script = "window.\(name) && window.\(name)(\(json))"
+        DebugLog.shared.append("回调 \(name) \(json.prefix(220))")
         DispatchQueue.main.async { [weak self] in
-            self?.webView.evaluateJavaScript(script, completionHandler: nil)
+            self?.webView.evaluateJavaScript(script) { _, error in
+                if let error {
+                    DebugLog.shared.append("回调注入失败 \(name): \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -149,9 +154,16 @@ final class WebViewController: UIViewController {
 
     func applyBarColor(hex: String?, bottomHex: String?) {
         if let color = Self.color(fromHex: hex) {
-            toolbar.barTintColor = color
-            toolbar.backgroundColor = color
-            progressView.progressTintColor = color
+            let appearance = UIToolbarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = color
+            toolbar.standardAppearance = appearance
+            toolbar.compactAppearance = appearance
+            toolbar.scrollEdgeAppearance = appearance
+            let foreground: UIColor = Self.isLight(color) ? .black : .white
+            toolbar.tintColor = foreground
+            progressView.progressTintColor = foreground
+            progressView.trackTintColor = color.withAlphaComponent(0.35)
         }
         if let color = Self.color(fromHex: bottomHex) {
             view.backgroundColor = color
@@ -159,10 +171,9 @@ final class WebViewController: UIViewController {
     }
 
     func vibrate(milliseconds: Int) {
-        if milliseconds >= 300 {
-            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
-        } else {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        if milliseconds < 300 {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }
     }
 
@@ -214,6 +225,15 @@ final class WebViewController: UIViewController {
         });
     })();
     """
+
+    static func isLight(_ color: UIColor) -> Bool {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
+        return 0.299 * red + 0.587 * green + 0.114 * blue > 0.6
+    }
 
     static func color(fromHex hex: String?) -> UIColor? {
         guard let raw = hex?.trimmingCharacters(in: .whitespaces), raw.hasPrefix("#") else { return nil }
