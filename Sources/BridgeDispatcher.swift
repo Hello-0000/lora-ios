@@ -83,8 +83,11 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         case "__jsError":
             DebugLog.shared.append("JS 错误: \(params["message"] ?? "") @ \(params["source"] ?? ""):\(params["line"] ?? "")")
 
-        case "modbusTcp", "nfc":
-            // M3 / M5 接入；H5 侧自带超时处理，此处保持静默
+        case "modbusTcp":
+            host?.modbusBridge.handle(params)
+
+        case "nfc":
+            // M5 接入；H5 侧自带超时处理，此处保持静默
             NSLog("[bridge] %@ 尚未实现", method)
             DebugLog.shared.append("未实现: \(method)")
 

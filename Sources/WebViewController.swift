@@ -7,6 +7,7 @@ final class WebViewController: UIViewController {
 
     private lazy var dispatcher = BridgeDispatcher(host: self)
     private(set) lazy var udpBridge = UDPBridge(host: self)
+    private(set) lazy var modbusBridge = ModbusBridge(host: self)
 
     private let progressView = UIProgressView(progressViewStyle: .bar)
     private let toolbar = UIToolbar()
