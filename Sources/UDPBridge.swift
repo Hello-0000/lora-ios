@@ -35,7 +35,7 @@ final class UDPBridge: UDPClientDelegate {
 
         let mac = Self.macBytes(data["mac"] as? String)
         let macKey = Self.macKey(data["mac"] as? String)
-        let deviceIP = data["ip"] as? String ?? knownIPs[macKey]
+        let deviceIP = (data["ip"] as? String) ?? knownIPs[macKey] ?? LoRaProtocol.broadcast
 
         if cmd.contains("search") {
             search()
