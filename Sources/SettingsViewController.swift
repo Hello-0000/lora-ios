@@ -41,11 +41,18 @@ final class SettingsViewController: UIViewController {
         languageControl.selectedSegmentIndex = AppSettings.shared.language == "en" ? 1 : 0
         languageControl.heightAnchor.constraint(equalToConstant: 32).isActive = true
 
+        let logButton = UIButton(type: .system)
+        logButton.setTitle("查看通信日志", for: .normal)
+        logButton.contentHorizontalAlignment = .left
+        logButton.addTarget(self, action: #selector(showLogs), for: .touchUpInside)
+        logButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+
         let stack = UIStackView(arrangedSubviews: [
             makeLabel("服务器地址"),
             urlField,
             makeLabel("语言"),
             languageControl,
+            logButton,
             makeLabel("提示：局域网直连设备时，填设备的 Web 地址（例如 192.168.4.1），不写 http:// 会自动补全。"),
         ])
         stack.axis = .vertical
@@ -73,6 +80,11 @@ final class SettingsViewController: UIViewController {
 
     @objc private func cancel() {
         dismiss(animated: true)
+    }
+
+    @objc private func showLogs() {
+        let controller = DebugLogViewController()
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     @objc private func save() {

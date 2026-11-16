@@ -59,9 +59,13 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         case "openCamera":
             host?.showNotice("扫码功能将在 M4 阶段接入")
 
-        case "udp", "modbusTcp", "nfc":
-            // M2 / M3 / M5 接入；H5 侧自带超时处理，此处保持静默
+        case "udp":
+            host?.udpBridge.handle(params)
+
+        case "modbusTcp", "nfc":
+            // M3 / M5 接入；H5 侧自带超时处理，此处保持静默
             NSLog("[bridge] %@ 尚未实现", method)
+            DebugLog.shared.append("未实现: \(method)")
 
         default:
             NSLog("[bridge] 未处理的方法: %@", method)

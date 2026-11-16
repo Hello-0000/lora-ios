@@ -6,6 +6,7 @@ import AudioToolbox
 final class WebViewController: UIViewController {
 
     private lazy var dispatcher = BridgeDispatcher(host: self)
+    private(set) lazy var udpBridge = UDPBridge(host: self)
 
     private let progressView = UIProgressView(progressViewStyle: .bar)
     private let toolbar = UIToolbar()
@@ -37,6 +38,7 @@ final class WebViewController: UIViewController {
         view.backgroundColor = .systemBackground
         setupUI()
         observeProgress()
+        udpBridge.start()
         loadBaseURL()
     }
 
