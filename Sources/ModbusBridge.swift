@@ -75,9 +75,9 @@ final class ModbusBridge {
         case .success(let values):
             DebugLog.shared.append("modbus 读 \(start)+\(length) = \(values)")
             reply(cmd: cmd, code: 0, data: detailInfo(slaveId: slaveId, start: start, length: length, values: values, ip: ip), msg: "OK")
-        case .failure(let message):
-            DebugLog.shared.append("modbus 读失败: \(message)")
-            reply(cmd: cmd, code: -1, data: detailInfo(slaveId: slaveId, start: start, length: length, values: nil, ip: ip), msg: message)
+        case .failure(let error):
+            DebugLog.shared.append("modbus 读失败: \(error.message)")
+            reply(cmd: cmd, code: -1, data: detailInfo(slaveId: slaveId, start: start, length: length, values: nil, ip: ip), msg: error.message)
         }
     }
 

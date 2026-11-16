@@ -1,6 +1,10 @@
 import Foundation
 import Darwin
 
+struct ModbusError: Error {
+    let message: String
+}
+
 /// 极简 Modbus TCP 客户端（功能码 0x03 读保持寄存器、0x10 写多个寄存器）
 final class ModbusClient {
 
@@ -80,10 +84,10 @@ final class ModbusClient {
         }
     }
 
-    func readHoldingRegisters(slaveId: Int, start: Int, length: Int) -> Result<[Int], String> {
+    func readHoldingRegisters(slaveId: Int, start: Int, length: Int) -> Result<[Int], ModbusError> {
         queue.sync {
-            guard fd >= 0 else { return .failure("this modbus connection is broken now") }
-            guard length > 0, length <= 125 else { return .failure("寄存器数量不合法") }
+            guard fd >= 0 else { return .failure(ModbusError(message: "this modbus connection is broken now")) }
+            guard length > 0, length <= 125 else { return .failure(ModbusError(message: "寄存器数量不合法")) }
 
             transactionId &+= 1
             let pdu: [UInt8] = [
@@ -93,22 +97,22 @@ final class ModbusClient {
             ]
             guard sendAll(mbap(transactionId: transactionId, pduLength: pdu.count, unitId: slaveId) + pdu) else {
                 close()
-                return .failure("发送失败")
+                return .failure(ModbusError(message: "发送失败"))
             }
             guard let header = receive(7) else {
                 close()
-                return .failure("响应超时")
+                return .failure(ModbusError(message: "响应超时"))
             }
             let responseLength = Int(header[4]) << 8 | Int(header[5])
             guard responseLength >= 2, let rest = receive(responseLength - 1) else {
-                return .failure("响应不完整")
+                return .failure(ModbusError(message: "响应不完整"))
             }
             if rest[0] & 0x80 != 0 {
-                return .failure("设备返回异常码 \(rest[1])")
+                return .failure(ModbusError(message: "设备返回异常码 \(rest[1])"))
             }
             let byteCount = Int(rest[1])
             guard rest.count >= 2 + byteCount, byteCount >= length * 2 else {
-                return .failure("数据长度不足")
+                return .failure(ModbusError(message: "数据长度不足"))
             }
             var values: [Int] = []
             for index in 0..<length {
