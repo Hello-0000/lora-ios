@@ -75,7 +75,7 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
             }
 
         case "openCamera":
-            host?.showNotice("扫码功能将在 M4 阶段接入")
+            host?.presentScanner()
 
         case "udp":
             host?.udpBridge.handle(params)

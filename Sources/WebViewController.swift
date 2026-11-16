@@ -185,6 +185,33 @@ final class WebViewController: UIViewController {
         }
     }
 
+    /// 扫码：结果以字符串形式回调（H5 内部会 JSON.parse）
+    func presentScanner() {
+        let scanner = QRScannerViewController { [weak self] value in
+            self?.sendStringCallback(.qr, value: value ?? "")
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    /// 用 JSON 字符串字面量作为参数回调：window.onQRCallback("...")
+    func sendStringCallback(_ callback: JSCallback, value: String) {
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: [value]),
+            let array = String(data: data, encoding: .utf8)
+        else { return }
+        let literal = String(array.dropFirst().dropLast())
+        let name = callback.rawValue
+        DebugLog.shared.append("回调 \(name) \(literal.prefix(160))")
+        DispatchQueue.main.async { [weak self] in
+            self?.webView.evaluateJavaScript("window.\(name) && window.\(name)(\(literal))") { _, error in
+                if let error {
+                    DebugLog.shared.append("回调注入失败 \(name): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     func showNotice(_ text: String) {
         let alert = UIAlertController(title: nil, message: text, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default))
