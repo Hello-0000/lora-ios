@@ -14,17 +14,23 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
-        guard message.name == "iOS", let body = message.body as? String else { return }
+        guard message.name == "iOS" else { return }
+        guard let body = message.body as? String else {
+            DebugLog.shared.append("收到非字符串消息: \(String(describing: message.body))")
+            return
+        }
         guard
             let data = body.data(using: .utf8),
             let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
             let method = json["method"] as? String
         else {
             NSLog("[bridge] 无法解析消息: %@", body)
+            DebugLog.shared.append("无法解析消息: \(body.prefix(160))")
             return
         }
         let params = json["params"] as? [String: Any] ?? [:]
         NSLog("[bridge] method=%@ params=%@", method, String(describing: params))
+        DebugLog.shared.append("JS → \(method) \(String(describing: params).prefix(160))")
         handle(method: method, params: params)
     }
 
@@ -61,6 +67,9 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
 
         case "udp":
             host?.udpBridge.handle(params)
+
+        case "__jsError":
+            DebugLog.shared.append("JS 错误: \(params["message"] ?? "") @ \(params["source"] ?? ""):\(params["line"] ?? "")")
 
         case "modbusTcp", "nfc":
             // M3 / M5 接入；H5 侧自带超时处理，此处保持静默

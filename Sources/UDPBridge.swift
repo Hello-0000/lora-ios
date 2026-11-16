@@ -104,6 +104,35 @@ final class UDPBridge: UDPClientDelegate {
         client.send(packet, to: host, port: LoRaProtocol.sendPort)
     }
 
+    /// 自检：打印本机网络信息，并探测网关与设备默认地址是否可达
+    func selfCheck() {
+        start()
+        logNetwork()
+        guard let info = NetworkInfo.wifiIPv4() else {
+            DebugLog.shared.append("自检：手机没有 Wi-Fi IPv4 地址")
+            return
+        }
+        send(LoRaProtocol.build(opcode: .search), to: info.gateway)
+        httpProbe("http://\(info.gateway)/")
+        httpProbe("http://192.168.4.1/")
+    }
+
+    private func httpProbe(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        DebugLog.shared.append("HTTP 探测 \(urlString)")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if let error {
+                DebugLog.shared.append("HTTP 不通 \(urlString): \(error.localizedDescription)")
+            } else if let http = response as? HTTPURLResponse {
+                DebugLog.shared.append("HTTP 可达 \(urlString) 状态 \(http.statusCode)")
+            } else {
+                DebugLog.shared.append("HTTP 无响应 \(urlString)")
+            }
+        }.resume()
+    }
+
     private func logNetwork() {
         guard let info = NetworkInfo.wifiIPv4() else {
             DebugLog.shared.append("Wi-Fi 未连接（无 en0 IPv4 地址）")

@@ -4,11 +4,13 @@ import UIKit
 final class SettingsViewController: UIViewController {
 
     private let onSave: () -> Void
+    private let onSelfCheck: (() -> Void)?
     private let urlField = UITextField()
     private let languageControl = UISegmentedControl(items: ["中文", "English"])
 
-    init(onSave: @escaping () -> Void) {
+    init(onSave: @escaping () -> Void, onSelfCheck: (() -> Void)? = nil) {
         self.onSave = onSave
+        self.onSelfCheck = onSelfCheck
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -47,11 +49,18 @@ final class SettingsViewController: UIViewController {
         logButton.addTarget(self, action: #selector(showLogs), for: .touchUpInside)
         logButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
 
+        let checkButton = UIButton(type: .system)
+        checkButton.setTitle("网络自检（探测网关）", for: .normal)
+        checkButton.contentHorizontalAlignment = .left
+        checkButton.addTarget(self, action: #selector(runSelfCheck), for: .touchUpInside)
+        checkButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+
         let stack = UIStackView(arrangedSubviews: [
             makeLabel("服务器地址"),
             urlField,
             makeLabel("语言"),
             languageControl,
+            checkButton,
             logButton,
             makeLabel("提示：局域网直连设备时，填设备的 Web 地址（例如 192.168.4.1），不写 http:// 会自动补全。"),
         ])
@@ -85,6 +94,13 @@ final class SettingsViewController: UIViewController {
     @objc private func showLogs() {
         let controller = DebugLogViewController()
         navigationController?.pushViewController(controller, animated: true)
+    }
+
+    @objc private func runSelfCheck() {
+        onSelfCheck?()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.showLogs()
+        }
     }
 
     @objc private func save() {

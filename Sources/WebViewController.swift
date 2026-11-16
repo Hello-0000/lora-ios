@@ -17,6 +17,11 @@ final class WebViewController: UIViewController {
     private lazy var webView: WKWebView = {
         let controller = WKUserContentController()
         controller.add(dispatcher, name: "iOS")
+        controller.addUserScript(WKUserScript(
+            source: Self.errorCaptureScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
@@ -133,9 +138,10 @@ final class WebViewController: UIViewController {
     }
 
     @objc func showSettings() {
-        let controller = SettingsViewController { [weak self] in
-            self?.loadBaseURL()
-        }
+        let controller = SettingsViewController(
+            onSave: { [weak self] in self?.loadBaseURL() },
+            onSelfCheck: { [weak self] in self?.udpBridge.selfCheck() }
+        )
         let navigation = UINavigationController(rootViewController: controller)
         navigation.modalPresentationStyle = .formSheet
         present(navigation, animated: true)
@@ -186,6 +192,29 @@ final class WebViewController: UIViewController {
 
     // MARK: - 工具
 
+    /// 捕获 H5 的 JS 运行时错误：iOS 15 的 JavaScriptCore 较老，语法不兼容时页面会静默失败
+    private static let errorCaptureScript = """
+    (function () {
+        function report(payload) {
+            try {
+                window.webkit.messageHandlers.iOS.postMessage({
+                    body: JSON.stringify({ method: '__jsError', params: payload })
+                });
+            } catch (e) {}
+        }
+        window.addEventListener('error', function (e) {
+            report({
+                message: String(e.message),
+                source: String(e.filename || ''),
+                line: e.lineno || 0
+            });
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+            report({ message: 'unhandledrejection: ' + String(e.reason) });
+        });
+    })();
+    """
+
     static func color(fromHex hex: String?) -> UIColor? {
         guard let raw = hex?.trimmingCharacters(in: .whitespaces), raw.hasPrefix("#") else { return nil }
         var digits = String(raw.dropFirst())
@@ -224,6 +253,11 @@ extension WebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         progressView.isHidden = true
         hintLabel.isHidden = true
+        DebugLog.shared.append("页面加载完成 \(webView.url?.absoluteString ?? "")")
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        DebugLog.shared.append("开始加载 \(webView.url?.absoluteString ?? AppSettings.shared.baseURL)")
     }
 
     func webView(
