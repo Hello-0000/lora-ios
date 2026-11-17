@@ -113,6 +113,8 @@ final class LocalHTTPServer {
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         if path == "/" || path.isEmpty { path = "/index.html" }
 
+        DebugLog.shared.append("HTTP \(parts[0]) \(path)")
+
         guard let root else {
             respond(fd, status: 404, mime: "text/plain; charset=utf-8", body: Array("not found".utf8))
             return
@@ -124,9 +126,11 @@ final class LocalHTTPServer {
             fileURL = root.appendingPathComponent("index.html")
         }
         guard let data = try? Data(contentsOf: fileURL) else {
+            DebugLog.shared.append("HTTP 404 \(path)")
             respond(fd, status: 404, mime: "text/plain; charset=utf-8", body: Array("not found".utf8))
             return
         }
+        DebugLog.shared.append("HTTP 200 \(path) \(data.count)B")
         respond(fd, status: 200, mime: Self.mimeType(fileURL.pathExtension), body: [UInt8](data))
     }
 

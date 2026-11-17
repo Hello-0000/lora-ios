@@ -356,6 +356,39 @@ extension WebViewController: WKNavigationDelegate {
         progressView.isHidden = true
         hintLabel.isHidden = true
         DebugLog.shared.append("页面加载完成 \(webView.url?.absoluteString ?? "")")
+        probePageState()
+    }
+
+    /// 原生侧探针：不依赖页面自身 JS，直接读 DOM 状态
+    private func probePageState() {
+        let script = """
+        (function () {
+            var app = document.getElementById('app');
+            var list = [];
+            for (var i = 0; i < document.scripts.length; i++) {
+                list.push(document.scripts[i].src || 'inline');
+            }
+            return JSON.stringify({
+                ready: document.readyState,
+                title: document.title,
+                appLength: app ? app.innerHTML.length : -1,
+                scripts: list,
+                bridge: !!window.webkit && !!window.webkit.messageHandlers && !!window.webkit.messageHandlers.iOS
+            });
+        })()
+        """
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.webView.evaluateJavaScript(script) { result, error in
+                if let error {
+                    DebugLog.shared.append("探针失败: \(error.localizedDescription)")
+                } else if let text = result as? String {
+                    DebugLog.shared.append("页面状态 \(text)")
+                    if text.contains("\"appLength\":0") || text.contains("\"appLength\":-1") {
+                        DebugLog.shared.append("警告：Vue 未挂载，页面为空")
+                    }
+                }
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
