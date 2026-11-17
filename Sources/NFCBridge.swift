@@ -50,7 +50,11 @@ final class NFCBridge: NSObject {
         }
         guard session == nil else { return }
 
-        let session = NFCTagReaderSession(pollingOption: [.iso14443], delegate: self, queue: nil)
+        guard let session = NFCTagReaderSession(pollingOption: [.iso14443], delegate: self, queue: nil) else {
+            DebugLog.shared.append("NFC 会话创建失败")
+            reply(cmd: "openNfc", code: -4, data: "", msg: "NFC session unavailable")
+            return
+        }
         session.alertMessage = "请将 iPhone 靠近终端"
         session.begin()
         self.session = session
