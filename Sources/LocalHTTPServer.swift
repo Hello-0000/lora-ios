@@ -37,7 +37,7 @@ final class LocalHTTPServer {
                 bind(fd, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        guard bound == 0, listen(fd, 16) == 0 else {
+        guard bound == 0, listen(fd, 128) == 0 else {
             DebugLog.shared.append("本地服务绑定失败 errno=\(errno)")
             close(fd)
             return nil
@@ -86,6 +86,11 @@ final class LocalHTTPServer {
 
     private func handle(_ fd: Int32) {
         defer { close(fd) }
+
+        // 防止客户端连上却不发完整请求，把线程占死
+        var timeout = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
         var request: [UInt8] = []
         var buffer = [UInt8](repeating: 0, count: 4096)

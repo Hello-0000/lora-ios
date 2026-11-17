@@ -17,6 +17,8 @@ final class NFCBridge: NSObject {
     private var idleInvalidate: DispatchWorkItem?
     private var pendingCommand: String?
     private var selfInvalidating = false
+    private var cancelNotified = false
+    private var lastOpenAt = Date.distantPast
 
     init(host: WebViewController?) {
         self.host = host
@@ -52,6 +54,10 @@ final class NFCBridge: NSObject {
             return
         }
         guard session == nil else { return }
+        // 防止 H5 与内部重试同时拉起会话
+        guard Date().timeIntervalSince(lastOpenAt) > 1.0 else { return }
+        lastOpenAt = Date()
+        cancelNotified = false
 
         guard let session = NFCTagReaderSession(pollingOption: [.iso14443], delegate: self, queue: nil) else {
             DebugLog.shared.append("NFC 会话创建失败")
@@ -344,6 +350,8 @@ extension NFCBridge: NFCTagReaderSessionDelegate {
         }
 
         // 用户手动取消系统面板：把结果回给 H5，否则它的弹窗会一直等到超时
+        guard !cancelNotified else { return }
+        cancelNotified = true
         if let cmd = pendingCommand {
             reply(cmd: cmd, code: -4, data: "", msg: "NFC 已取消")
             pendingCommand = nil

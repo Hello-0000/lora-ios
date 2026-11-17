@@ -222,6 +222,10 @@ final class WebViewController: UIViewController {
     private func showHint(_ text: String) {
         hintLabel.text = text + "\n\n（点此重试）"
         hintLabel.isHidden = false
+        // 自动消失，避免盖在正常页面上
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.hintLabel.isHidden = true
+        }
     }
 
     // MARK: - 桥接对外能力
@@ -512,6 +516,7 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        hintLabel.isHidden = true
         DebugLog.shared.append("开始加载 \(webView.url?.absoluteString ?? AppSettings.shared.baseURL)")
     }
 
