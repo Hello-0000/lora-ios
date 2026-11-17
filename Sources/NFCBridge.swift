@@ -14,6 +14,7 @@ final class NFCBridge: NSObject {
     private var session: NFCTagReaderSession?
     private var tag: NFCMiFareTag?
     private var currentSector: UInt8 = 0
+    private var idleInvalidate: DispatchWorkItem?
 
     init(host: WebViewController?) {
         self.host = host
@@ -67,10 +68,26 @@ final class NFCBridge: NSObject {
     }
 
     private func close() {
+        idleInvalidate?.cancel()
         session?.invalidate()
         session = nil
         setTag(nil)
         DebugLog.shared.append("NFC 会话已关闭")
+    }
+
+    /// 操作完成后自动收起系统 NFC 面板（H5 一批指令发完就不再调用 closeNfc）
+    private func scheduleInvalidate() {
+        idleInvalidate?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, let session = self.session else { return }
+            session.alertMessage = "读取成功"
+            session.invalidate()
+            self.session = nil
+            self.setTag(nil)
+            DebugLog.shared.append("NFC 操作完成，已收起面板")
+        }
+        idleInvalidate = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: item)
     }
 
     private func setTag(_ value: NFCMiFareTag?) {
@@ -98,6 +115,14 @@ final class NFCBridge: NSObject {
     // MARK: - 指令分发
 
     private func perform(cmd: String, data: [String: Any]) {
+        idleInvalidate?.cancel()
+
+        // 会话已被自动收起时，重新拉起，避免后续指令直接失败
+        if session == nil {
+            DispatchQueue.main.async { [weak self] in self?.open() }
+            usleep(300_000)
+        }
+
         guard waitForTag(8) != nil else {
             reply(cmd: cmd, code: -4, data: "", msg: "NFC Tag is null too!")
             return
@@ -127,6 +152,7 @@ final class NFCBridge: NSObject {
         } catch {
             reply(cmd: cmd, code: -4, data: "", msg: error.localizedDescription)
         }
+        scheduleInvalidate()
     }
 
     // MARK: - 具体操作
@@ -196,8 +222,8 @@ final class NFCBridge: NSObject {
     }
 
     private func wait(until check: () throws -> Bool) throws {
-        // 对应安卓的 1000 次 × 1ms
-        for _ in 0..<100 {
+        // 对应安卓的 1000 次 × 1ms，放宽到约 2 秒，避免终端忙时偶发超时
+        for _ in 0..<200 {
             if try check() { return }
             usleep(10_000)
         }
