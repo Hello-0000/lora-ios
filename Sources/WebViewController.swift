@@ -258,7 +258,7 @@ final class WebViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         navBarTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.refreshStatusBarStyle()
+            self?.refreshChrome()
         }
     }
 
@@ -272,45 +272,49 @@ final class WebViewController: UIViewController {
         statusBarLight ? .lightContent : .darkContent
     }
 
-    /// 有顶栏的页面用顶栏色填充状态栏；登录页这类无顶栏页面保持页面底色
-    private func refreshStatusBarStyle() {
+    /// 按当前页面是否有顶栏，统一决定状态栏 / 底部工具栏配色
+    private func refreshChrome() {
         webView.evaluateJavaScript("!!document.querySelector('.van-nav-bar')") { [weak self] result, _ in
             guard let self else { return }
             let hasNavBar = (result as? Bool) ?? false
-            DispatchQueue.main.async {
-                if hasNavBar, let color = self.appBarColor {
-                    self.statusBarBackground.backgroundColor = color
-                    self.statusBarLight = !Self.isLight(color)
-                } else {
-                    self.statusBarBackground.backgroundColor = .systemBackground
-                    self.statusBarLight = false
-                }
-                self.setNeedsStatusBarAppearanceUpdate()
-            }
+            DispatchQueue.main.async { self.applyChrome(hasNavBar: hasNavBar) }
         }
+    }
+
+    private func applyChrome(hasNavBar: Bool) {
+        let color: UIColor
+        if hasNavBar, let bar = appBarColor {
+            color = bar
+        } else {
+            color = .systemBackground
+        }
+
+        statusBarBackground.backgroundColor = color
+        bottomFiller.backgroundColor = color
+
+        let foreground: UIColor = Self.isLight(color) ? .black : .white
+        let appearance = UIToolbarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = color
+        toolbar.standardAppearance = appearance
+        toolbar.compactAppearance = appearance
+        toolbar.scrollEdgeAppearance = appearance
+        toolbar.tintColor = foreground
+        progressView.progressTintColor = foreground
+        progressView.trackTintColor = color.withAlphaComponent(0.35)
+
+        statusBarLight = !Self.isLight(color)
+        setNeedsStatusBarAppearanceUpdate()
     }
 
     func applyBarColor(hex: String?, bottomHex: String?) {
         if let color = Self.color(fromHex: hex) {
             appBarColor = color
-            statusBarLight = !Self.isLight(color)
-            setNeedsStatusBarAppearanceUpdate()
-            statusBarBackground.backgroundColor = color
-            bottomFiller.backgroundColor = color
-            let appearance = UIToolbarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = color
-            toolbar.standardAppearance = appearance
-            toolbar.compactAppearance = appearance
-            toolbar.scrollEdgeAppearance = appearance
-            let foreground: UIColor = Self.isLight(color) ? .black : .white
-            toolbar.tintColor = foreground
-            progressView.progressTintColor = foreground
-            progressView.trackTintColor = color.withAlphaComponent(0.35)
         }
         if let color = Self.color(fromHex: bottomHex) {
             view.backgroundColor = color
         }
+        refreshChrome()
     }
 
     func vibrate(milliseconds: Int) {
@@ -465,7 +469,7 @@ extension WebViewController: WKNavigationDelegate {
         hintLabel.isHidden = true
         DebugLog.shared.append("页面加载完成 \(webView.url?.absoluteString ?? "")")
         probePageState()
-        refreshStatusBarStyle()
+        refreshChrome()
     }
 
     /// 原生侧探针：不依赖页面自身 JS，直接读 DOM 状态

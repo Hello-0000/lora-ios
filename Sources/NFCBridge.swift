@@ -15,6 +15,8 @@ final class NFCBridge: NSObject {
     private var tag: NFCMiFareTag?
     private var currentSector: UInt8 = 0
     private var idleInvalidate: DispatchWorkItem?
+    private var pendingCommand: String?
+    private var selfInvalidating = false
 
     init(host: WebViewController?) {
         self.host = host
@@ -69,9 +71,16 @@ final class NFCBridge: NSObject {
 
     private func close() {
         idleInvalidate?.cancel()
+        selfInvalidating = true
         session?.invalidate()
         session = nil
         setTag(nil)
+        if let cmd = pendingCommand {
+            reply(cmd: cmd, code: -4, data: "", msg: "NFC 已取消")
+            pendingCommand = nil
+        }
+        // H5 的「取消」按钮在等 closeNfc 的结果，必须回
+        reply(cmd: "closeNfc", code: 0, data: "", msg: "OK")
         DebugLog.shared.append("NFC 会话已关闭")
     }
 
@@ -83,6 +92,7 @@ final class NFCBridge: NSObject {
         idleInvalidate?.cancel()
         let item = DispatchWorkItem { [weak self] in
             guard let self, let session = self.session else { return }
+            self.selfInvalidating = true
             session.invalidate()
             self.session = nil
             self.setTag(nil)
@@ -118,6 +128,8 @@ final class NFCBridge: NSObject {
 
     private func perform(cmd: String, data: [String: Any]) {
         idleInvalidate?.cancel()
+        pendingCommand = cmd
+        defer { pendingCommand = nil }
 
         // 会话已被自动收起时，重新拉起，避免后续指令直接失败
         if session == nil {
@@ -324,6 +336,20 @@ extension NFCBridge: NFCTagReaderSessionDelegate {
         DebugLog.shared.append("NFC 会话结束: \(error.localizedDescription)")
         self.session = nil
         setTag(nil)
+
+        // 自己主动收起（读完了 / 点了关闭）不通知 H5
+        if selfInvalidating {
+            selfInvalidating = false
+            return
+        }
+
+        // 用户手动取消系统面板：把结果回给 H5，否则它的弹窗会一直等到超时
+        if let cmd = pendingCommand {
+            reply(cmd: cmd, code: -4, data: "", msg: "NFC 已取消")
+            pendingCommand = nil
+        } else {
+            reply(cmd: "openNfc", code: -4, data: "", msg: "NFC 已取消")
+        }
     }
 
     func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
