@@ -348,11 +348,14 @@ final class WebViewController: UIViewController {
         else { return }
         let literal = String(array.dropFirst().dropLast())
         let name = callback.rawValue
+        let script = "window.\(name) ? (window.\(name)(\(literal)), 'ok') : 'missing'"
         DebugLog.shared.append("回调 \(name) \(literal.prefix(160))")
         DispatchQueue.main.async { [weak self] in
-            self?.webView.evaluateJavaScript("window.\(name) && window.\(name)(\(literal))") { _, error in
+            self?.webView.evaluateJavaScript(script) { result, error in
                 if let error {
                     DebugLog.shared.append("回调注入失败 \(name): \(error.localizedDescription)")
+                } else if let text = result as? String, text == "missing" {
+                    DebugLog.shared.append("回调未注册 \(name)：H5 当前页面没有监听")
                 }
             }
         }

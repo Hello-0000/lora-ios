@@ -164,9 +164,9 @@ final class QRScannerViewController: UIViewController {
         guard !finished else { return }
         finished = true
         stopSession()
-        dismiss(animated: true) { [onFinish] in
-            onFinish(value)
-        }
+        // 先回传结果，再关闭相机页，避免 H5 还在等回调时看到自己的超时
+        onFinish(value)
+        dismiss(animated: true)
     }
 }
 
