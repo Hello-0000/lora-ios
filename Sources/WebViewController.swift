@@ -13,6 +13,7 @@ final class WebViewController: UIViewController {
     private let progressView = UIProgressView(progressViewStyle: .bar)
     private let toolbar = UIToolbar()
     private let hintLabel = UILabel()
+    private let statusBarBackground = UIView()
 
     private var progressObservation: NSKeyValueObservation?
 
@@ -77,7 +78,17 @@ final class WebViewController: UIViewController {
         view.addSubview(toolbar)
         view.addSubview(hintLabel)
 
+        // 状态栏区域跟随 H5 顶栏配色，避免白条与蓝色标题栏割裂
+        statusBarBackground.translatesAutoresizingMaskIntoConstraints = false
+        statusBarBackground.backgroundColor = .systemBackground
+        view.insertSubview(statusBarBackground, at: 0)
+
         NSLayoutConstraint.activate([
+            statusBarBackground.topAnchor.constraint(equalTo: view.topAnchor),
+            statusBarBackground.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            statusBarBackground.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            statusBarBackground.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+
             webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -162,7 +173,32 @@ final class WebViewController: UIViewController {
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         ))
+        controller.addUserScript(WKUserScript(
+            source: Self.layoutFixScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
     }
+
+    /// 顶栏标题过长会压住右侧徽章，这里做省略号截断（前端无源码，用注入 CSS 兜底）
+    private static let layoutFixScript = """
+    (function () {
+        var css = [
+            '.van-nav-bar__title { max-width: 52% !important; overflow: hidden !important; ',
+            'text-overflow: ellipsis !important; white-space: nowrap !important; }',
+            '.van-nav-bar__content { min-width: 0 !important; overflow: hidden !important; }'
+        ].join('');
+        function apply() {
+            if (document.getElementById('lora-layout-fix')) { return; }
+            var style = document.createElement('style');
+            style.id = 'lora-layout-fix';
+            style.textContent = css;
+            (document.head || document.documentElement).appendChild(style);
+        }
+        apply();
+        document.addEventListener('DOMContentLoaded', apply);
+    })();
+    """
 
     /// 前端自带 eruda.init()，这里按设置隐藏它的悬浮入口
     private static func devToolsScript(show: Bool) -> String {
@@ -228,6 +264,7 @@ final class WebViewController: UIViewController {
 
     func applyBarColor(hex: String?, bottomHex: String?) {
         if let color = Self.color(fromHex: hex) {
+            statusBarBackground.backgroundColor = color
             let appearance = UIToolbarAppearance()
             appearance.configureWithOpaqueBackground()
             appearance.backgroundColor = color
@@ -426,6 +463,12 @@ extension WebViewController: WKNavigationDelegate {
                     DebugLog.shared.append("探针失败: \(error.localizedDescription)")
                 } else if let text = result as? String {
                     DebugLog.shared.append("页面状态 \(text)")
+                    // 页面已渲染出内容即视为正常，避免登录页没有桥接调用被误判为白屏
+                    if let range = text.range(of: "\"appLength\":"),
+                       let value = Int(text[range.upperBound...].prefix(while: { $0.isNumber })),
+                       value > 0 {
+                        self?.bridgeAlive = true
+                    }
                     if text.contains("\"appLength\":0") || text.contains("\"appLength\":-1") {
                         DebugLog.shared.append("警告：Vue 未挂载，页面为空")
                     }
