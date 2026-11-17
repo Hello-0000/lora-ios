@@ -19,6 +19,13 @@ final class AppSettings {
     private enum Key {
         static let baseURL = "baseURL"
         static let language = "language"
+        static let devTools = "showDevTools"
+    }
+
+    /// 是否显示前端自带的 eruda 调试面板（默认关闭）
+    var showDevTools: Bool {
+        get { defaults.bool(forKey: Key.devTools) }
+        set { defaults.set(newValue, forKey: Key.devTools) }
     }
 
     /// 空字符串表示使用内置页面

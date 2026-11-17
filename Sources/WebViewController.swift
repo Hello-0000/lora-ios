@@ -24,11 +24,6 @@ final class WebViewController: UIViewController {
     private lazy var webView: WKWebView = {
         let controller = WKUserContentController()
         controller.add(dispatcher, name: "iOS")
-        controller.addUserScript(WKUserScript(
-            source: Self.errorCaptureScript,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
-        ))
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
@@ -136,6 +131,7 @@ final class WebViewController: UIViewController {
 
         hintLabel.isHidden = true
         bridgeAlive = false
+        applyUserScripts()
         DebugLog.shared.append(bundled ? "加载内置页面 \(url.absoluteString)" : "加载外部页面 \(url.absoluteString)")
         webView.load(URLRequest(url: url))
 
@@ -150,6 +146,43 @@ final class WebViewController: UIViewController {
                 }
             }
         }
+    }
+
+    /// 每次加载前刷新注入脚本（eruda 开关需要跟随设置变化）
+    private func applyUserScripts() {
+        let controller = webView.configuration.userContentController
+        controller.removeAllUserScripts()
+        controller.addUserScript(WKUserScript(
+            source: Self.errorCaptureScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+        controller.addUserScript(WKUserScript(
+            source: Self.devToolsScript(show: AppSettings.shared.showDevTools),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+    }
+
+    /// 前端自带 eruda.init()，这里按设置隐藏它的悬浮入口
+    private static func devToolsScript(show: Bool) -> String {
+        if show { return "window.__loraShowDevTools = true;" }
+        return """
+        (function () {
+            window.__loraShowDevTools = false;
+            function hide() {
+                var nodes = document.querySelectorAll('#eruda, .eruda-container');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].style.display = 'none';
+                }
+            }
+            document.addEventListener('DOMContentLoaded', hide);
+            try {
+                new MutationObserver(hide).observe(document.documentElement, { childList: true, subtree: true });
+            } catch (e) {}
+            setInterval(hide, 800);
+        })();
+        """
     }
 
     /// 收到任意有效桥接调用即说明内置页面 JS 正常

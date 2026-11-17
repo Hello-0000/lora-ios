@@ -7,6 +7,7 @@ final class SettingsViewController: UIViewController {
     private let onSelfCheck: (() -> Void)?
     private let urlField = UITextField()
     private let languageControl = UISegmentedControl(items: ["中文", "English"])
+    private let devToolsSwitch = UISwitch()
 
     init(onSave: @escaping () -> Void, onSelfCheck: (() -> Void)? = nil) {
         self.onSave = onSave
@@ -67,6 +68,11 @@ final class SettingsViewController: UIViewController {
         checkButton.addTarget(self, action: #selector(runSelfCheck), for: .touchUpInside)
         checkButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
 
+        let devToolsRow = UIStackView(arrangedSubviews: [makeLabel("显示调试面板（eruda）"), devToolsSwitch])
+        devToolsRow.axis = .horizontal
+        devToolsRow.alignment = .center
+        devToolsSwitch.isOn = AppSettings.shared.showDevTools
+
         let stack = UIStackView(arrangedSubviews: [
             makeLabel("页面地址"),
             urlField,
@@ -74,6 +80,7 @@ final class SettingsViewController: UIViewController {
             vendorButton,
             makeLabel("语言"),
             languageControl,
+            devToolsRow,
             checkButton,
             logButton,
             makeLabel("提示：默认使用打包在 App 内的离线页面，不经过外网；需要在线版本时点「使用厂商在线页面」，也可以直接填设备 Web 地址（如 192.168.4.1）。"),
@@ -132,6 +139,7 @@ final class SettingsViewController: UIViewController {
     @objc private func save() {
         AppSettings.shared.baseURL = urlField.text ?? ""
         AppSettings.shared.language = languageControl.selectedSegmentIndex == 1 ? "en" : "zh"
+        AppSettings.shared.showDevTools = devToolsSwitch.isOn
         dismiss(animated: true) { [onSave] in onSave() }
     }
 }
