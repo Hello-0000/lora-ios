@@ -77,17 +77,19 @@ final class NFCBridge: NSObject {
 
     /// 操作完成后自动收起系统 NFC 面板（H5 一批指令发完就不再调用 closeNfc）
     private func scheduleInvalidate() {
+        DispatchQueue.main.async { [weak self] in
+            self?.session?.alertMessage = "读取成功"
+        }
         idleInvalidate?.cancel()
         let item = DispatchWorkItem { [weak self] in
             guard let self, let session = self.session else { return }
-            session.alertMessage = "读取成功"
             session.invalidate()
             self.session = nil
             self.setTag(nil)
             DebugLog.shared.append("NFC 操作完成，已收起面板")
         }
         idleInvalidate = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: item)
     }
 
     private func setTag(_ value: NFCMiFareTag?) {

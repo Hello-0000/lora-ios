@@ -36,8 +36,14 @@ final class SettingsViewController: UIViewController {
         urlField.autocapitalizationType = .none
         urlField.autocorrectionType = .no
         urlField.clearButtonMode = .whileEditing
-        urlField.placeholder = AppSettings.defaultBaseURL
+        urlField.placeholder = AppSettings.bundledBaseURL
         urlField.text = AppSettings.shared.baseURL
+
+        let resetButton = UIButton(type: .system)
+        resetButton.setTitle("恢复内置页面（离线）", for: .normal)
+        resetButton.contentHorizontalAlignment = .left
+        resetButton.addTarget(self, action: #selector(useBundled), for: .touchUpInside)
+        resetButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
         urlField.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
         languageControl.selectedSegmentIndex = AppSettings.shared.language == "en" ? 1 : 0
@@ -56,13 +62,14 @@ final class SettingsViewController: UIViewController {
         checkButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
 
         let stack = UIStackView(arrangedSubviews: [
-            makeLabel("服务器地址"),
+            makeLabel("页面地址"),
             urlField,
+            resetButton,
             makeLabel("语言"),
             languageControl,
             checkButton,
             logButton,
-            makeLabel("提示：局域网直连设备时，填设备的 Web 地址（例如 192.168.4.1），不写 http:// 会自动补全。"),
+            makeLabel("提示：留空或点「恢复内置页面」使用打包在 App 内的离线页面，不经过外网；填 http://192.168.4.1 这类地址则加载外部页面。"),
         ])
         stack.axis = .vertical
         stack.spacing = 8
@@ -101,6 +108,12 @@ final class SettingsViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.showLogs()
         }
+    }
+
+    @objc private func useBundled() {
+        urlField.text = AppSettings.bundledBaseURL
+        AppSettings.shared.baseURL = AppSettings.bundledBaseURL
+        dismiss(animated: true) { [onSave] in onSave() }
     }
 
     @objc private func save() {
