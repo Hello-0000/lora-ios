@@ -120,7 +120,8 @@ final class WebViewController: UIViewController {
         let target: URL?
         if bundled {
             if let port = localServer.start() {
-                target = URL(string: "http://127.0.0.1:\(port)/index.html")
+                // 必须用根路径：前端是 createWebHistory，/index.html 匹配不到任何路由
+                target = URL(string: "http://127.0.0.1:\(port)/")
             } else {
                 target = nil
             }
@@ -273,7 +274,12 @@ final class WebViewController: UIViewController {
     /// 捕获 H5 的 JS 运行时错误：iOS 15 的 JavaScriptCore 较老，语法不兼容时页面会静默失败
     private static let errorCaptureScript = """
     (function () {
+        window.__loraErrors = [];
         function report(payload) {
+            try {
+                window.__loraErrors.push(String(payload.message || payload));
+                if (window.__loraErrors.length > 20) { window.__loraErrors.shift(); }
+            } catch (e) {}
             try {
                 window.webkit.messageHandlers.iOS.postMessage({
                     body: JSON.stringify({ method: '__jsError', params: payload })
@@ -364,16 +370,20 @@ extension WebViewController: WKNavigationDelegate {
         let script = """
         (function () {
             var app = document.getElementById('app');
-            var list = [];
-            for (var i = 0; i < document.scripts.length; i++) {
-                list.push(document.scripts[i].src || 'inline');
-            }
+            var errors = (window.__loraErrors || []).slice(0, 5);
+            var html = app ? app.innerHTML : '';
+            var body = document.body ? (document.body.innerText || '') : '';
             return JSON.stringify({
                 ready: document.readyState,
                 title: document.title,
-                appLength: app ? app.innerHTML.length : -1,
-                scripts: list,
-                bridge: !!window.webkit && !!window.webkit.messageHandlers && !!window.webkit.messageHandlers.iOS
+                appLength: app ? html.length : -1,
+                appHtml: html.slice(0, 320),
+                bodyText: body.slice(0, 160),
+                errors: errors,
+                href: location.href,
+                ua: navigator.userAgent.slice(0, 140),
+                bridge: !!window.webkit && !!window.webkit.messageHandlers && !!window.webkit.messageHandlers.iOS,
+                storage: (function () { try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; } catch (e) { return String(e); } })()
             });
         })()
         """
