@@ -59,6 +59,11 @@ final class NFCBridge: NSObject {
         session.begin()
         self.session = session
         DebugLog.shared.append("NFC 会话已启动")
+
+        // 卡片已经在场时立即回报，等价于安卓 onNewIntent 的 openNfc 回调
+        if currentTag() != nil {
+            reply(cmd: "openNfc", code: 0, data: "", msg: "OK")
+        }
     }
 
     private func close() {
@@ -313,6 +318,8 @@ extension NFCBridge: NFCTagReaderSessionDelegate {
             self.currentSector = 0
             session.alertMessage = "已连接，正在读取"
             DebugLog.shared.append("NFC 已连接 \(mifare.identifier.map { String(format: "%02X", $0) }.joined())")
+            // 对应安卓 onNewIntent 里的 openNfc 成功回调：H5 收到后才开始下发指令
+            self.reply(cmd: "openNfc", code: 0, data: "", msg: "OK")
         }
     }
 }
