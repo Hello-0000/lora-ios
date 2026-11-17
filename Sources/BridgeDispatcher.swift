@@ -31,9 +31,6 @@ final class BridgeDispatcher: NSObject, WKScriptMessageHandler {
         let params = json["params"] as? [String: Any] ?? [:]
         NSLog("[bridge] method=%@ params=%@", method, String(describing: params))
         DebugLog.shared.append("JS → \(method) \(String(describing: params).prefix(160))")
-        if method != "__jsError" {
-            host?.markBridgeActivity()
-        }
         handle(method: method, params: params)
     }
 

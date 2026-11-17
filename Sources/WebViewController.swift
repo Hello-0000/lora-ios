@@ -16,10 +16,6 @@ final class WebViewController: UIViewController {
     private let statusBarBackground = UIView()
 
     private var progressObservation: NSKeyValueObservation?
-
-    /// 内置页面是否已跑起来（收到任意桥接消息即视为 JS 正常）
-    private var bridgeAlive = false
-    private var usedFallback = false
     private let localServer = LocalHTTPServer()
 
     private lazy var webView: WKWebView = {
@@ -141,22 +137,9 @@ final class WebViewController: UIViewController {
         }
 
         hintLabel.isHidden = true
-        bridgeAlive = false
         applyUserScripts()
         DebugLog.shared.append(bundled ? "加载内置页面 \(url.absoluteString)" : "加载外部页面 \(url.absoluteString)")
         webView.load(URLRequest(url: url))
-
-        // 内置页面优先：6 秒内没有任何桥接调用，判定为白屏并自动回落到厂商地址
-        if bundled, !usedFallback {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-                guard let self, !self.bridgeAlive, !self.usedFallback else { return }
-                self.usedFallback = true
-                DebugLog.shared.append("内置页面 6 秒无响应，自动回落到厂商地址")
-                if let fallback = URL(string: AppSettings.vendorBaseURL) {
-                    self.webView.load(URLRequest(url: fallback))
-                }
-            }
-        }
     }
 
     /// 每次加载前刷新注入脚本（eruda 开关需要跟随设置变化）
@@ -219,11 +202,6 @@ final class WebViewController: UIViewController {
             setInterval(hide, 800);
         })();
         """
-    }
-
-    /// 收到任意有效桥接调用即说明内置页面 JS 正常
-    func markBridgeActivity() {
-        bridgeAlive = true
     }
 
     private func showHint(_ text: String) {
@@ -463,12 +441,6 @@ extension WebViewController: WKNavigationDelegate {
                     DebugLog.shared.append("探针失败: \(error.localizedDescription)")
                 } else if let text = result as? String {
                     DebugLog.shared.append("页面状态 \(text)")
-                    // 页面已渲染出内容即视为正常，避免登录页没有桥接调用被误判为白屏
-                    if let range = text.range(of: "\"appLength\":"),
-                       let value = Int(text[range.upperBound...].prefix(while: { $0.isNumber })),
-                       value > 0 {
-                        self?.bridgeAlive = true
-                    }
                     if text.contains("\"appLength\":0") || text.contains("\"appLength\":-1") {
                         DebugLog.shared.append("警告：Vue 未挂载，页面为空")
                     }
