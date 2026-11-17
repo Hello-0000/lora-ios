@@ -341,7 +341,9 @@ final class WebViewController: UIViewController {
             self?.sendStringCallback(.qr, value: value ?? "")
         }
         scanner.modalPresentationStyle = .fullScreen
-        present(scanner, animated: true)
+        // 先预热相机再立即呈现，减少 H5 加载弹窗的停留时间
+        scanner.prepareCamera()
+        present(scanner, animated: false)
     }
 
     /// 用 JSON 字符串字面量作为参数回调：window.onQRCallback("...")

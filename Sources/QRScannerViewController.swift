@@ -24,6 +24,7 @@ final class QRScannerViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupOverlay()
+        attachPreviewIfNeeded()
         requestAccess()
     }
 
@@ -77,6 +78,11 @@ final class QRScannerViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    /// 提前配置并启动相机，减少 H5 弹窗的等待时间
+    func prepareCamera() {
+        requestAccess()
+    }
+
     private func configureCamera() {
         guard !configured else { return }
         guard let device = AVCaptureDevice.default(for: .video),
@@ -100,14 +106,18 @@ final class QRScannerViewController: UIViewController {
         output.metadataObjectTypes = [.qr]
         session.commitConfiguration()
 
+        configured = true
+        attachPreviewIfNeeded()
+        startSession()
+    }
+
+    private func attachPreviewIfNeeded() {
+        guard configured, isViewLoaded, previewLayer == nil else { return }
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
         preview.frame = view.bounds
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
-
-        configured = true
-        startSession()
     }
 
     private func startSession() {
