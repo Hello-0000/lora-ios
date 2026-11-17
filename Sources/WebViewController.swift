@@ -19,7 +19,7 @@ final class WebViewController: UIViewController {
     /// 内置页面是否已跑起来（收到任意桥接消息即视为 JS 正常）
     private var bridgeAlive = false
     private var usedFallback = false
-    private let vendorURL = "http://iot.konnad.com:10200"
+    private let localServer = LocalHTTPServer()
 
     private lazy var webView: WKWebView = {
         let controller = WKUserContentController()
@@ -34,7 +34,6 @@ final class WebViewController: UIViewController {
         configuration.userContentController = controller
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
-        configuration.setURLSchemeHandler(LocalAssetSchemeHandler(), forURLScheme: LocalAssetSchemeHandler.scheme)
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
@@ -116,21 +115,36 @@ final class WebViewController: UIViewController {
 
     @objc func loadBaseURL() {
         let raw = AppSettings.shared.baseURL
-        guard let url = URL(string: raw) else {
-            showHint("地址无效：\(raw)")
+        let bundled = raw.isEmpty
+
+        let target: URL?
+        if bundled {
+            if let port = localServer.start() {
+                target = URL(string: "http://127.0.0.1:\(port)/index.html")
+            } else {
+                target = nil
+            }
+        } else {
+            target = URL(string: raw)
+        }
+
+        guard let url = target else {
+            showHint("地址无效或内置页面启动失败")
             return
         }
+
         hintLabel.isHidden = true
         bridgeAlive = false
+        DebugLog.shared.append(bundled ? "加载内置页面 \(url.absoluteString)" : "加载外部页面 \(url.absoluteString)")
         webView.load(URLRequest(url: url))
 
         // 内置页面优先：6 秒内没有任何桥接调用，判定为白屏并自动回落到厂商地址
-        if raw.hasPrefix(LocalAssetSchemeHandler.scheme + "://"), !usedFallback {
+        if bundled, !usedFallback {
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
                 guard let self, !self.bridgeAlive, !self.usedFallback else { return }
                 self.usedFallback = true
                 DebugLog.shared.append("内置页面 6 秒无响应，自动回落到厂商地址")
-                if let fallback = URL(string: self.vendorURL) {
+                if let fallback = URL(string: AppSettings.vendorBaseURL) {
                     self.webView.load(URLRequest(url: fallback))
                 }
             }

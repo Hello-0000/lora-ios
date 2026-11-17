@@ -36,14 +36,20 @@ final class SettingsViewController: UIViewController {
         urlField.autocapitalizationType = .none
         urlField.autocorrectionType = .no
         urlField.clearButtonMode = .whileEditing
-        urlField.placeholder = AppSettings.bundledBaseURL
+        urlField.placeholder = "留空 = 内置页面（离线）"
         urlField.text = AppSettings.shared.baseURL
 
         let resetButton = UIButton(type: .system)
-        resetButton.setTitle("恢复内置页面（离线）", for: .normal)
+        resetButton.setTitle("使用内置页面（离线）", for: .normal)
         resetButton.contentHorizontalAlignment = .left
         resetButton.addTarget(self, action: #selector(useBundled), for: .touchUpInside)
         resetButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+
+        let vendorButton = UIButton(type: .system)
+        vendorButton.setTitle("使用厂商在线页面", for: .normal)
+        vendorButton.contentHorizontalAlignment = .left
+        vendorButton.addTarget(self, action: #selector(useVendor), for: .touchUpInside)
+        vendorButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
         urlField.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
         languageControl.selectedSegmentIndex = AppSettings.shared.language == "en" ? 1 : 0
@@ -65,11 +71,12 @@ final class SettingsViewController: UIViewController {
             makeLabel("页面地址"),
             urlField,
             resetButton,
+            vendorButton,
             makeLabel("语言"),
             languageControl,
             checkButton,
             logButton,
-            makeLabel("提示：留空或点「恢复内置页面」使用打包在 App 内的离线页面，不经过外网；填 http://192.168.4.1 这类地址则加载外部页面。"),
+            makeLabel("提示：默认使用打包在 App 内的离线页面，不经过外网；需要在线版本时点「使用厂商在线页面」，也可以直接填设备 Web 地址（如 192.168.4.1）。"),
         ])
         stack.axis = .vertical
         stack.spacing = 8
@@ -111,8 +118,14 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func useBundled() {
-        urlField.text = AppSettings.bundledBaseURL
-        AppSettings.shared.baseURL = AppSettings.bundledBaseURL
+        urlField.text = ""
+        AppSettings.shared.baseURL = ""
+        dismiss(animated: true) { [onSave] in onSave() }
+    }
+
+    @objc private func useVendor() {
+        urlField.text = AppSettings.vendorBaseURL
+        AppSettings.shared.baseURL = AppSettings.vendorBaseURL
         dismiss(animated: true) { [onSave] in onSave() }
     }
 

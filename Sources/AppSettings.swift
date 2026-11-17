@@ -4,18 +4,15 @@ import Foundation
 final class AppSettings {
     static let shared = AppSettings()
 
-    /// 内置页面（离线可用，不经过厂商服务器）
-    static let bundledBaseURL = "lora://app/index.html"
-
-    /// 未配置时使用内置页面
-    static let defaultBaseURL = bundledBaseURL
+    /// 厂商在线页面（需要外网）
+    static let vendorBaseURL = "http://iot.konnad.com:10200"
 
     private let defaults = UserDefaults.standard
 
     private init() {
-        // 早期版本默认连厂商云地址，升级后自动切回内置页面（自定义地址保持不变）
-        if defaults.string(forKey: Key.baseURL) == "http://iot.konnad.com:10200" {
-            defaults.set(Self.bundledBaseURL, forKey: Key.baseURL)
+        // 早期版本默认连厂商云地址，升级后改为「空值 = 内置页面」，需要在线可手动切换
+        if defaults.string(forKey: Key.baseURL) == Self.vendorBaseURL {
+            defaults.set("", forKey: Key.baseURL)
         }
     }
 
@@ -24,8 +21,9 @@ final class AppSettings {
         static let language = "language"
     }
 
+    /// 空字符串表示使用内置页面
     var baseURL: String {
-        get { defaults.string(forKey: Key.baseURL) ?? Self.defaultBaseURL }
+        get { defaults.string(forKey: Key.baseURL) ?? "" }
         set { defaults.set(Self.normalize(newValue), forKey: Key.baseURL) }
     }
 
@@ -34,10 +32,10 @@ final class AppSettings {
         set { defaults.set(newValue, forKey: Key.language) }
     }
 
-    /// 与 Android 端一致：没写协议头时补 http://；留空则回落到内置页面
+    /// 留空 = 内置页面；没写协议头时补 http://
     static func normalize(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return defaultBaseURL }
+        guard !trimmed.isEmpty else { return "" }
         if trimmed.contains("://") { return trimmed }
         return "http://" + trimmed
     }
