@@ -14,6 +14,10 @@ final class WebViewController: UIViewController {
     private let toolbar = UIToolbar()
     private let hintLabel = UILabel()
     private let statusBarBackground = UIView()
+    private let bottomFiller = UIView()
+    private var appBarColor: UIColor?
+    private var statusBarLight = false
+    private var navBarTimer: Timer?
 
     private var progressObservation: NSKeyValueObservation?
     private let localServer = LocalHTTPServer()
@@ -79,11 +83,20 @@ final class WebViewController: UIViewController {
         statusBarBackground.backgroundColor = .systemBackground
         view.insertSubview(statusBarBackground, at: 0)
 
+        // 工具栏下方的安全区填充，避免出现一条白边
+        bottomFiller.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(bottomFiller, belowSubview: toolbar)
+
         NSLayoutConstraint.activate([
             statusBarBackground.topAnchor.constraint(equalTo: view.topAnchor),
             statusBarBackground.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statusBarBackground.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             statusBarBackground.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+
+            bottomFiller.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+            bottomFiller.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bottomFiller.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            bottomFiller.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -167,8 +180,10 @@ final class WebViewController: UIViewController {
     private static let layoutFixScript = """
     (function () {
         var css = [
-            '.van-nav-bar__title { max-width: 52% !important; overflow: hidden !important; ',
-            'text-overflow: ellipsis !important; white-space: nowrap !important; }',
+            // 左侧网关名过长时截断，避免压住中间的徽章
+            '.van-nav-bar__left { max-width: 52% !important; overflow: hidden !important; }',
+            '.van-nav-bar__left .flex-div { overflow: hidden !important; ',
+            'white-space: nowrap !important; text-overflow: ellipsis !important; }',
             '.van-nav-bar__content { min-width: 0 !important; overflow: hidden !important; }'
         ].join('');
         function apply() {
@@ -240,9 +255,48 @@ final class WebViewController: UIViewController {
         present(navigation, animated: true)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        navBarTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.refreshStatusBarStyle()
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navBarTimer?.invalidate()
+        navBarTimer = nil
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        statusBarLight ? .lightContent : .darkContent
+    }
+
+    /// 有顶栏的页面用顶栏色填充状态栏；登录页这类无顶栏页面保持页面底色
+    private func refreshStatusBarStyle() {
+        webView.evaluateJavaScript("!!document.querySelector('.van-nav-bar')") { [weak self] result, _ in
+            guard let self else { return }
+            let hasNavBar = (result as? Bool) ?? false
+            DispatchQueue.main.async {
+                if hasNavBar, let color = self.appBarColor {
+                    self.statusBarBackground.backgroundColor = color
+                    self.statusBarLight = !Self.isLight(color)
+                } else {
+                    self.statusBarBackground.backgroundColor = .systemBackground
+                    self.statusBarLight = false
+                }
+                self.setNeedsStatusBarAppearanceUpdate()
+            }
+        }
+    }
+
     func applyBarColor(hex: String?, bottomHex: String?) {
         if let color = Self.color(fromHex: hex) {
+            appBarColor = color
+            statusBarLight = !Self.isLight(color)
+            setNeedsStatusBarAppearanceUpdate()
             statusBarBackground.backgroundColor = color
+            bottomFiller.backgroundColor = color
             let appearance = UIToolbarAppearance()
             appearance.configureWithOpaqueBackground()
             appearance.backgroundColor = color
@@ -411,6 +465,7 @@ extension WebViewController: WKNavigationDelegate {
         hintLabel.isHidden = true
         DebugLog.shared.append("页面加载完成 \(webView.url?.absoluteString ?? "")")
         probePageState()
+        refreshStatusBarStyle()
     }
 
     /// 原生侧探针：不依赖页面自身 JS，直接读 DOM 状态
