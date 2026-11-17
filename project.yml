@@ -25,8 +25,8 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGN_IDENTITY: ""
-        MARKETING_VERSION: "0.4.1"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "0.5.0"
+        CURRENT_PROJECT_VERSION: "10"
     info:
       path: Sources/Info.plist
       properties:
@@ -41,5 +41,6 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: 用于在局域网内发现并控制 LoRa 设备
+        NFCReaderUsageDescription: 用于贴近终端读写设备信息
         NSCameraUsageDescription: 用于扫描设备二维码
         NSPhotoLibraryUsageDescription: 用于读取相册中的二维码图片

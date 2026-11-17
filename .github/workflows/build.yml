@@ -36,6 +36,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build | tee build.log
 
+      - name: 注入 NFC entitlement
+        run: |
+          APP="build/Build/Products/Release-iphoneos/LoRa.app"
+          cp LoRa.entitlements "$APP/entitlements.plist"
+          codesign --force --sign - --entitlements LoRa.entitlements "$APP"
+          echo "--- 签名后的 entitlements ---"
+          codesign -d --entitlements :- "$APP" || true
+
       - name: 打包 IPA
         run: |
           APP="build/Build/Products/Release-iphoneos/LoRa.app"
