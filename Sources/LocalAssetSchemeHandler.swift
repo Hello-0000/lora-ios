@@ -46,9 +46,11 @@ final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
                       "Cache-Control": "no-cache",
                   ]
               ) else {
+            DebugLog.shared.append("asset 404 \(task.request.url?.path ?? "-")")
             fail(task, code: 404)
             return
         }
+        DebugLog.shared.append("asset 200 \(url.path) \(data.count)B")
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()

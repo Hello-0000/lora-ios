@@ -16,6 +16,11 @@ final class WebViewController: UIViewController {
 
     private var progressObservation: NSKeyValueObservation?
 
+    /// 内置页面是否已跑起来（收到任意桥接消息即视为 JS 正常）
+    private var bridgeAlive = false
+    private var usedFallback = false
+    private let vendorURL = "http://iot.konnad.com:10200"
+
     private lazy var webView: WKWebView = {
         let controller = WKUserContentController()
         controller.add(dispatcher, name: "iOS")
@@ -116,7 +121,25 @@ final class WebViewController: UIViewController {
             return
         }
         hintLabel.isHidden = true
+        bridgeAlive = false
         webView.load(URLRequest(url: url))
+
+        // 内置页面优先：6 秒内没有任何桥接调用，判定为白屏并自动回落到厂商地址
+        if raw.hasPrefix(LocalAssetSchemeHandler.scheme + "://"), !usedFallback {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                guard let self, !self.bridgeAlive, !self.usedFallback else { return }
+                self.usedFallback = true
+                DebugLog.shared.append("内置页面 6 秒无响应，自动回落到厂商地址")
+                if let fallback = URL(string: self.vendorURL) {
+                    self.webView.load(URLRequest(url: fallback))
+                }
+            }
+        }
+    }
+
+    /// 收到任意有效桥接调用即说明内置页面 JS 正常
+    func markBridgeActivity() {
+        bridgeAlive = true
     }
 
     private func showHint(_ text: String) {
@@ -250,6 +273,21 @@ final class WebViewController: UIViewController {
                 line: e.lineno || 0
             });
         });
+        document.addEventListener('error', function (e) {
+            var t = e.target;
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+                report({ message: '资源加载失败: ' + String(t.src || t.href) });
+            }
+        }, true);
+        (function () {
+            var original = console.error;
+            console.error = function () {
+                try {
+                    report({ message: 'console.error: ' + Array.prototype.join.call(arguments, ' ') });
+                } catch (e) {}
+                original.apply(console, arguments);
+            };
+        })();
         window.addEventListener('unhandledrejection', function (e) {
             report({ message: 'unhandledrejection: ' + String(e.reason) });
         });
@@ -308,6 +346,18 @@ extension WebViewController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         DebugLog.shared.append("开始加载 \(webView.url?.absoluteString ?? AppSettings.shared.baseURL)")
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        if navigationAction.targetFrame?.isMainFrame == true,
+           let url = navigationAction.request.url {
+            DebugLog.shared.append("导航 → \(url.absoluteString)")
+        }
+        decisionHandler(.allow)
     }
 
     func webView(
